@@ -11,6 +11,22 @@
 
 ---
 
+## 📸 Screenshots
+
+### Home Screen
+![DocBot Home Screen](screenshots/screenshot_home.png)
+
+### File Upload
+![File Upload Interface](screenshots/screenshot_upload_file.png)
+
+### Chat & RAG Pipeline
+![Chat and RAG Pipeline](screenshots/screenshot_chat.png)
+
+### SQL Database Connection
+![SQL Database Connection](screenshots/screenshot_sql.png)
+
+---
+
 ## ✨ Features
 
 | Pipeline | Trigger | What it does |
@@ -127,123 +143,6 @@ The app will open at **http://localhost:8501**.
 
 ---
 
-## 🌐 Deployment
-
-### Option A — Streamlit Community Cloud (recommended for Streamlit apps)
-
-Streamlit Community Cloud is the easiest way to deploy a Streamlit app and it's **free**.
-
-1. Push your repo to GitHub (ensure `.env` is git-ignored).
-2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**.
-3. Select your repo, branch, and `app.py` as the entry point.
-4. In **Advanced settings → Secrets**, add your environment variables in TOML format:
-   ```toml
-   GEMINI_API_KEY = "your_key_here"
-   GITHUB_TOKEN   = "your_token_here"
-   ```
-5. Click **Deploy**.
-
----
-
-### Option B — Vercel
-
-> ⚠️ **Important caveat:** Vercel is designed for serverless Node.js/Edge functions. Streamlit is a long-running server process, so it has significant limitations on Vercel (no WebSocket support, 10-second function timeout on the free tier, no persistent state). **Streamlit Community Cloud or a VPS (Render, Railway, Fly.io) is strongly recommended** for production use.
-
-If you still want to deploy to Vercel:
-
-#### 1 — Install the Vercel CLI
-
-```bash
-npm install -g vercel
-```
-
-#### 2 — Set environment variable secrets in Vercel
-
-```bash
-vercel secrets add gemini_api_key     "your_gemini_key"
-vercel secrets add openai_api_key     "your_openai_key"
-vercel secrets add github_token       "your_github_token"
-```
-
-#### 3 — The `vercel.json` configuration
-
-The `vercel.json` at the project root handles routing all requests to `app.py`:
-
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "runtime": "python3.11"
-      }
-    }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "app.py" }
-  ],
-  "env": {
-    "GEMINI_API_KEY": "@gemini_api_key",
-    "OPENAI_API_KEY": "@openai_api_key",
-    "GITHUB_TOKEN":   "@github_token"
-  }
-}
-```
-
-#### 4 — Deploy
-
-```bash
-vercel --prod
-```
-
----
-
-### Option C — Render (recommended VPS alternative)
-
-1. Create a new **Web Service** on [render.com](https://render.com).
-2. Connect your GitHub repo.
-3. Set:
-   - **Build command:** `pip install -r requirements.txt`
-   - **Start command:** `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`
-4. Add environment variables in the Render dashboard.
-
----
-
-## 🔧 Configuration
-
-### Streamlit config (optional)
-
-Create `.streamlit/config.toml` to customise the server:
-
-```toml
-[server]
-headless = true
-port = 8501
-enableCORS = false
-enableXsrfProtection = false
-
-[theme]
-base = "dark"
-primaryColor = "#818cf8"
-backgroundColor = "#0a0d14"
-secondaryBackgroundColor = "#111827"
-textColor = "#e0e0e0"
-font = "sans serif"
-```
-
-### Changing the default model
-
-In `.env`:
-```
-DEFAULT_MODEL=gpt-4.1-mini
-```
-
-Available values: `gemini-2.5-flash` · `gpt-4.1` · `gpt-4.1-mini` · `gpt-4.1-nano`
-
----
 
 ## 📦 Adding New Dependencies
 
