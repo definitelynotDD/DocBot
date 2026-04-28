@@ -1,0 +1,35 @@
+streamlit>=1.35.0
+python-dotenv>=1.0.0
+pandas>=2.0.0
+plotly>=5.18.0
+numpy>=1.26.0
+ 
+# LLM providers
+google-generativeai>=0.8.0   # Gemini 2.5 Flash  — aistudio.google.com/apikey
+openai>=1.30.0               # GitHub Models (GPT-4.1 family) — github.com/settings/tokens
+                             # Set GITHUB_TOKEN in .env to use GPT models
+ 
+# RAG stack
+langchain>=0.2.0
+langchain-community>=0.2.0
+langchain-huggingface>=0.0.3
+langchain-text-splitters>=0.2.0
+faiss-cpu>=1.8.0
+sentence-transformers>=2.7.0
+ 
+# Predictive analytics / forecasting
+scikit-learn>=1.4.0          # Linear & polynomial regression
+prophet>=1.1.5               # Time-series forecasting (optional — install separately if needed)
+                             # prophet requires pystan; install with: pip install prophet
+ 
+# SQL database integration
+sqlalchemy>=2.0.0            # Core SQL engine (required)
+psycopg2-binary>=2.9.0       # PostgreSQL driver
+pymysql>=1.1.0               # MySQL driver
+pyodbc>=5.0.0                # MSSQL / SQL Server driver (requires ODBC Driver 17 installed on OS)
+ 
+# File parsers
+pypdf>=4.0.0                 # PDF
+python-docx>=1.1.0           # Word (.docx)
+openpyxl>=3.1.0              # Excel (.xlsx)
+xlrd>=2.0.1                  # Excel (.xls)
