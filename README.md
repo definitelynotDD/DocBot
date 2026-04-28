@@ -62,28 +62,6 @@
 
 ---
 
-## 📁 Project Structure
-
-```
-docbot/
-├── app.py                  # Main Streamlit application
-├── requirements.txt        # Python dependencies
-├── vercel.json             # Vercel deployment config
-├── .env.example            # Environment variable template (safe to commit)
-├── .env                    # Your real secrets          ← git-ignored
-├── .gitignore
-├── README.md
-│
-├── .streamlit/
-│   └── config.toml         # Streamlit theme / server settings (optional)
-│
-└── sample.js               # GitHub Models Node.js usage example (reference only)
-```
-
-> **Note:** `node_modules/`, `venv/`, `.env`, and any uploaded data files are all git-ignored.
-
----
-
 ## ⚙️ Prerequisites
 
 - Python **3.11+**
