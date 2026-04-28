@@ -1,7 +1,8 @@
 # 🤖 DocBot — AI-Powered Document Assistant
 
 > Chat with your documents, query databases, generate charts, and forecast trends — all in one place.
-**🌐 Live Demo:** https://yourdocbot.streamlit.app/ 
+
+> **🌐 Live Demo:** https://yourdocbot.streamlit.app/ 
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-red?logo=streamlit)](https://streamlit.io/)
