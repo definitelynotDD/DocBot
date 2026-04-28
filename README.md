@@ -20,10 +20,10 @@
 ![File Upload Interface](screenshots/screenshot_upload_file.png)
 
 ### Chat & RAG Pipeline
-![Chat and RAG Pipeline](screenshots/screenshot_chat.png)
+![Chat and RAG Pipeline](screenshots/screenshot_sql.png)
 
 ### SQL Database Connection
-![SQL Database Connection](screenshots/screenshot_sql.png)
+![SQL Database Connection](screenshots/screenshot_chat.png)
 
 ---
 
