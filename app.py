@@ -3,6 +3,7 @@ import re
 import io
 import time
 import hashlib
+import html  # ← SECURITY: HTML escaping for LLM output
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -51,6 +52,19 @@ try:
     HAS_DOCX = True
 except ImportError:
     HAS_DOCX = False
+
+try:
+    import RestrictedPython
+    from RestrictedPython import compile_restricted
+    HAS_RESTRICTED_PYTHON = True
+except ImportError:
+    HAS_RESTRICTED_PYTHON = False
+
+try:
+    import sqlparse
+    HAS_SQLPARSE = True
+except ImportError:
+    HAS_SQLPARSE = False
 
 # Load .env on startup
 load_dotenv()
@@ -103,6 +117,20 @@ FORECAST_HORIZON_DEFAULT = 10   # default periods to forecast ahead
 
 # Fallback chain: when a model is rate-limited, try the next one in this list
 FALLBACK_CHAIN = ["gemini-2.5-flash", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4.1"]
+
+# ─────────────────────────────────────────────────────────────
+# SECURITY CONSTANTS
+# ─────────────────────────────────────────────────────────────
+MAX_UPLOAD_SIZE_MB = 20  # 20 MB file size limit for uploads
+MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+ALLOWED_FILE_EXTENSIONS = {"pdf", "docx", "txt", "csv", "xlsx", "xls"}
+
+# Privacy notice for API calls
+PRIVACY_NOTICE = """
+ **Privacy Notice**: Your uploaded files are sent to Google (Gemini) and/or GitHub (GPT) APIs 
+for processing. Do not upload sensitive personal information, trade secrets, or regulated data 
+(PII, HIPAA, PCI). Ensure you have appropriate consent and comply with your data protection policies.
+"""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -368,10 +396,24 @@ st.markdown("""
 
 
 # ─────────────────────────────────────────────────────────────
-# FILE PARSERS
+# FILE PARSERS  (with size limits and security checks)
 # ─────────────────────────────────────────────────────────────
 
+def _check_file_size(file_bytes: bytes, filename: str) -> bool:
+    """Validate file size. Return True if valid, False if oversized."""
+    if len(file_bytes) > MAX_UPLOAD_SIZE_BYTES:
+        st.error(
+            f"❌ File **{filename}** exceeds {MAX_UPLOAD_SIZE_MB}MB limit "
+            f"({len(file_bytes) / (1024*1024):.1f}MB). "
+            "Please upload a smaller file."
+        )
+        return False
+    return True
+
+
 def parse_pdf(file_bytes: bytes, filename: str) -> list[Document]:
+    if not _check_file_size(file_bytes, filename):
+        return []
     if not HAS_PYPDF:
         st.warning("pypdf not installed — cannot parse PDFs.")
         return []
@@ -388,6 +430,8 @@ def parse_pdf(file_bytes: bytes, filename: str) -> list[Document]:
 
 
 def parse_docx(file_bytes: bytes, filename: str) -> list[Document]:
+    if not _check_file_size(file_bytes, filename):
+        return []
     if not HAS_DOCX:
         st.warning("python-docx not installed — cannot parse Word docs.")
         return []
@@ -399,6 +443,8 @@ def parse_docx(file_bytes: bytes, filename: str) -> list[Document]:
 
 
 def parse_txt(file_bytes: bytes, filename: str) -> list[Document]:
+    if not _check_file_size(file_bytes, filename):
+        return []
     text = file_bytes.decode("utf-8", errors="ignore")
     if not text.strip():
         return []
@@ -406,6 +452,8 @@ def parse_txt(file_bytes: bytes, filename: str) -> list[Document]:
 
 
 def parse_csv(file_bytes: bytes, filename: str) -> tuple[list[Document], pd.DataFrame | None]:
+    if not _check_file_size(file_bytes, filename):
+        return [], None
     try:
         df = pd.read_csv(io.BytesIO(file_bytes))
     except Exception as e:
@@ -424,6 +472,8 @@ def parse_csv(file_bytes: bytes, filename: str) -> tuple[list[Document], pd.Data
 
 
 def parse_excel(file_bytes: bytes, filename: str) -> tuple[list[Document], pd.DataFrame | None]:
+    if not _check_file_size(file_bytes, filename):
+        return [], None
     try:
         df = pd.read_excel(io.BytesIO(file_bytes))
     except Exception as e:
@@ -589,6 +639,42 @@ def classify_intents(complete, question: str, has_tabular: bool, has_sql: bool =
 
 
 # ─────────────────────────────────────────────────────────────
+# SAFE CODE EXECUTION (using RestrictedPython)
+# ─────────────────────────────────────────────────────────────
+
+def execute_user_code(code: str, safe_globals: dict, safe_locals: dict) -> tuple[bool, str | None]:
+    """
+    Execute user-generated code safely using RestrictedPython.
+    Returns (success: bool, error_message: str | None)
+    """
+    if not HAS_RESTRICTED_PYTHON:
+        # Fallback: run without RestrictedPython but with restricted builtins
+        try:
+            exec(code, {"__builtins__": {}}, safe_locals)
+            return True, None
+        except Exception as e:
+            return False, str(e)
+    
+    try:
+        # Compile code with RestrictedPython
+        byte_code = compile_restricted(code, '<user_code>', 'exec')
+        exec(byte_code, safe_globals, safe_locals)
+        return True, None
+    except SyntaxError as e:
+        return False, f"Code compilation error: {e}"
+    except Exception as e:
+        return False, str(e)
+
+
+def escape_llm_content(content: str) -> str:
+    """
+    SECURITY: Escape LLM-generated content for safe HTML rendering.
+    Use this when combining LLM output with HTML and using unsafe_allow_html=True.
+    """
+    return html.escape(content) if content else content
+
+
+# ─────────────────────────────────────────────────────────────
 # PIPELINE A — GRAPH
 # ─────────────────────────────────────────────────────────────
 
@@ -703,7 +789,11 @@ def run_graph_pipeline(complete, dataframes: dict, question: str, history: list)
         local_vars[safe] = frame
 
     try:
-        exec(code, {"__builtins__": {}}, local_vars)  # restricted builtins
+        # SECURITY: Use RestrictedPython for safe execution
+        success, err = execute_user_code(code, {"__builtins__": {}}, local_vars)
+        if not success:
+            return None, f"Chart error: {err}\n\n```python\n{code}\n```"
+        
         fig = local_vars.get("fig")
         if fig is None:
             return None, f"No `fig` variable created.\n\n```python\n{code}\n```"
@@ -717,19 +807,6 @@ def run_graph_pipeline(complete, dataframes: dict, question: str, history: list)
         )
         return fig, None
     except Exception as e:
-        # Try once more with full builtins in case restricted eval failed
-        try:
-            exec(code, {}, local_vars)
-            fig = local_vars.get("fig")
-            if fig:
-                fig.update_layout(
-                    paper_bgcolor="#0a0d14", plot_bgcolor="#111827",
-                    font_color="#e0e0e0", font_family="IBM Plex Sans",
-                    title_font_color="#818cf8",
-                )
-                return fig, None
-        except Exception:
-            pass
         return None, f"Chart error: {e}\n\n```python\n{code}\n```"
 
 
@@ -774,7 +851,12 @@ def run_data_pipeline(complete, dataframes: dict, question: str, history: list) 
         local_vars[safe] = frame
 
     try:
-        exec(code, {}, local_vars)
+        # SECURITY: Use RestrictedPython for safe execution
+        success, err = execute_user_code(code, {"__builtins__": {}}, local_vars)
+        if not success:
+            return {"code": code, "df": None, "summary": None,
+                    "error": f"Execution error: {err}", "capped": False}
+        
         result = local_vars.get("result")
         if result is None:
             return {"code": code, "df": None, "summary": None,
@@ -1253,7 +1335,43 @@ def test_db_connection(url: str) -> tuple[bool, str, dict]:
 
 
 def run_sql_query(url: str, sql: str, max_rows: int = MAX_DISPLAY_ROWS) -> tuple[pd.DataFrame | None, str | None]:
-    """Execute a SQL query and return (DataFrame, error)."""
+    """
+    Execute a SQL query safely and return (DataFrame, error).
+    SECURITY: Only SELECT queries are allowed. Write operations (INSERT, UPDATE, DELETE, DROP, CREATE, etc.) are blocked.
+    """
+    if not HAS_SQLALCHEMY:
+        return None, "SQLAlchemy not installed."
+    
+    # SECURITY: Validate query is SELECT-only
+    try:
+        if HAS_SQLPARSE:
+            parsed = sqlparse.parse(sql)
+            if not parsed or len(parsed) == 0:
+                return None, "Invalid SQL query."
+            
+            # Get the statement type
+            stmt_type = parsed[0].get_type()
+            if stmt_type != "SELECT":
+                return None, f"❌ Only SELECT queries are allowed. '{stmt_type}' queries are not permitted for security reasons."
+            
+            # Double-check: no dangerous keywords in the query
+            dangerous_keywords = {"DROP", "DELETE", "INSERT", "UPDATE", "CREATE", "ALTER", "TRUNCATE", "EXEC", "EXECUTE"}
+            sql_upper = sql.strip().upper()
+            for keyword in dangerous_keywords:
+                if re.search(rf'\b{keyword}\b', sql_upper):
+                    return None, f"❌ Query contains forbidden operation: '{keyword}'. Only SELECT is allowed."
+        else:
+            # Fallback: simple regex check if sqlparse not available
+            sql_upper = sql.strip().upper()
+            if not sql_upper.startswith("SELECT"):
+                return None, "Only SELECT queries are allowed."
+            dangerous_keywords = {"DROP", "DELETE", "INSERT", "UPDATE", "CREATE", "ALTER", "TRUNCATE"}
+            for keyword in dangerous_keywords:
+                if re.search(rf'\b{keyword}\b', sql_upper):
+                    return None, f"Query contains forbidden operation: '{keyword}'. Only SELECT is allowed."
+    except Exception as e:
+        return None, f"Query validation error: {e}"
+    
     try:
         engine = create_engine(url)
         with engine.connect() as conn:
@@ -1519,6 +1637,8 @@ def main():
             accept_multiple_files=True,
             label_visibility="visible",
         )
+        # SECURITY: Privacy notice for API data transmission
+        st.info(PRIVACY_NOTICE, icon="⚠️")
 
     vectorstore = None
     dataframes = {}
@@ -1828,10 +1948,11 @@ def main():
                         if summary:
                             st.markdown(summary)
                         total = result.get("total_rows", len(df) if df is not None else 0)
+                        escaped_code = html.escape(result['code'])
                         header = (
                             f"<details><summary style='cursor:pointer; color:#6b7280; "
                             f"font-size:12px; font-family:IBM Plex Mono,monospace'>🔧 Code</summary>"
-                            f"\n\n```python\n{result['code']}\n```\n</details>"
+                            f"\n\n```python\n{escaped_code}\n```\n</details>"
                         )
                         warning = None
                         if df is not None and not df.empty:
@@ -1934,10 +2055,11 @@ def main():
                             elapsed = time.time() - t0
 
                         # Always show the generated SQL in a collapsible block
+                        escaped_sql = html.escape(sql_query)
                         sql_block_html = (
                             f"<details><summary style='cursor:pointer; color:#38bdf8; "
                             f"font-size:12px; font-family:IBM Plex Mono,monospace'>🗄️ Generated SQL</summary>"
-                            f"\n\n```sql\n{sql_query}\n```\n</details>"
+                            f"\n\n```sql\n{escaped_sql}\n```\n</details>"
                         )
 
                         if sql_err:
@@ -1963,10 +2085,11 @@ def main():
                                     result_df, sql_err2 = run_sql_query(conn_url, fixed_sql)
                                     if sql_err2 is None:
                                         sql_query = fixed_sql
+                                        escaped_fixed_sql = html.escape(sql_query)
                                         sql_block_html = (
                                             f"<details open><summary style='cursor:pointer; color:#4ade80; "
                                             f"font-size:12px; font-family:IBM Plex Mono,monospace'>✅ Fixed SQL</summary>"
-                                            f"\n\n```sql\n{sql_query}\n```\n</details>"
+                                            f"\n\n```sql\n{escaped_fixed_sql}\n```\n</details>"
                                         )
                                         st.markdown(sql_block_html, unsafe_allow_html=True)
                                         sql_err = None
