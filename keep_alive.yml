@@ -1,0 +1,21 @@
+name: Keep DocBot Awake
+
+on:
+  schedule:
+    # Runs every 5 minutes, 24/7
+    - cron: "*/5 * * * *"
+  workflow_dispatch: # lets you trigger it manually too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping DocBot
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${{ secrets.APP_URL }}")
+          echo "Response status: $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "✅ App is awake"
+          else
+            echo "⚠️  Got status $STATUS — app may be cold-starting"
+          fi
