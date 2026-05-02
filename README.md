@@ -44,6 +44,7 @@
 - 📄 **Multi-format ingestion** — PDF, Word (.docx), plain text, CSV, Excel (.xlsx/.xls)
 - ⬇️ **CSV export** — download any query or forecast result
 - 🗄️ **SQL integration** — PostgreSQL, MySQL, SQLite, MSSQL, Oracle
+- 🔒 **Sandboxed code execution** — LLM-generated Python runs inside RestrictedPython; SQL is validated to SELECT-only before execution
 
 ---
 
@@ -59,6 +60,7 @@
 | Forecasting | scikit-learn (linear/polynomial regression) · Prophet (optional) |
 | Database | SQLAlchemy + psycopg2 / pymysql / pyodbc |
 | File parsing | pypdf · python-docx · openpyxl · xlrd |
+| Security | RestrictedPython · sqlparse |
 
 ---
 
@@ -131,12 +133,23 @@ pip freeze > requirements.txt
 
 ---
 
-## 🛡️ Security Notes
+## 🛡️ Security
 
-- **Never commit `.env`** — it is listed in `.gitignore`.
-- Rotate any API keys that may have been accidentally exposed.
-- The `exec()` calls in the DATA and GRAPH pipelines use restricted builtins — review and harden for production use.
-- For SQL connections, consider read-only database users and connection pooling limits.
+DocBot was audited and hardened before public release. Key protections:
+
+**Safe code execution** — LLM-generated Python (DATA and GRAPH pipelines) is compiled and run inside [RestrictedPython](https://restrictedpython.readthedocs.io/), preventing sandbox escapes via Python's object model. Falls back to restricted builtins if the library is unavailable.
+
+**SQL write protection** — The NL→SQL pipeline validates every generated query through two layers before execution: `sqlparse` checks the AST for `SELECT`-only statements, and a regex pass blocks dangerous keywords (`DROP`, `DELETE`, `INSERT`, `UPDATE`, `TRUNCATE`, etc.). Pair this with a read-only database user for defence-in-depth.
+
+**XSS prevention** — LLM output interpolated into HTML is escaped with `html.escape()`. An `escape_llm_content()` helper is provided for any future HTML rendering.
+
+**File size limits** — Uploads are validated at 20 MB across all parsers (`parse_pdf`, `parse_docx`, `parse_csv`, etc.) to prevent OOM crashes.
+
+**Secret hygiene** — `.gitignore` covers `*.env` and `.env*`. Environment template (`env.example`) includes guidance for read-only DB users and email allowlisting for public deployments.
+
+**Privacy notice** — Users are informed that uploaded files are transmitted to Google (Gemini) and GitHub (GPT) APIs before any file is processed.
+
+See [SECURITY.md](SECURITY.md) for deployment best practices, a verification checklist, and self-hosted / Streamlit Cloud guides.
 
 ---
 
