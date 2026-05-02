@@ -1,0 +1,19 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping app
+        run: |
+          if curl -f --max-time 10 ${{ secrets.APP_URL }}; then
+            echo "App is alive"
+          else
+            echo "App ping failed"
+            exit 1
+          fi
