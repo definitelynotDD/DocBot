@@ -1830,14 +1830,11 @@ def main():
                     short = prompt if len(prompt) <= 38 else prompt[:35] + "…"
                     if st.button(f"{emoji} {short}", key=f"chip_{prompt}", use_container_width=True):
                         st.session_state.pending_question = prompt
-                        st.rerun()
         st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
     # ── Chat input ────────────────────────────────────────
-    if "pending_question" in st.session_state:
-        user_input = st.session_state.pop("pending_question")
-    else:
-        user_input = st.chat_input("Ask about your documents or database…")
+    typed_input = st.chat_input("Ask about your documents or database…")
+    user_input = st.session_state.pop("pending_question", None) or typed_input
 
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input, "type": "text"})
